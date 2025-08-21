@@ -198,7 +198,7 @@ def main():
     load_css()  # Load custom CSS for styling
     display_navbar()
     st.markdown('<div id="hero-section"></div>', unsafe_allow_html=True)
-    display_hero_section()  # Display hero section instead of header
+    get_started_button_clicked = display_hero_section()  # Display hero section instead of header
     st.markdown('<div id="about-section"></div>', unsafe_allow_html=True)
     display_about_section()
     st.markdown('<div id="services-section"></div>', unsafe_allow_html=True)
@@ -255,6 +255,29 @@ def main():
     
     st.markdown('<div id="contact-section"></div>', unsafe_allow_html=True)
     display_contact_section() # Display contact section at the end
+
+    # New: Handle hero button click to 'open' the sidebar conceptually
+    if 'sidebar_expanded' not in st.session_state:
+        st.session_state.sidebar_expanded = False
+
+    if get_started_button_clicked:
+        st.session_state.sidebar_expanded = True
+        st.rerun() # Rerun to apply sidebar state change
+
+    if st.session_state.sidebar_expanded:
+        # The sidebar is already displayed by display_sidebar() at the top of main()
+        # We can add a message or guide the user here if needed.
+        st.markdown("""
+        <script>
+            var sidebar = window.parent.document.querySelector('.css-e3gqgs');
+            if (sidebar && sidebar.getAttribute('aria-expanded') === 'false') {
+                var expandButton = window.parent.document.querySelector('[data-testid="stSidebarCollapseButton"]');
+                if (expandButton) {
+                    expandButton.click();
+                }
+            }
+        </script>
+        """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()

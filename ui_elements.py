@@ -288,13 +288,15 @@ def display_hero_section():
         <p class="hero-subtext">
             Our advanced AI Resume Analyzer provides instant feedback, smart job matching, and personalized recommendations to help you stand out.
         </p>
-        <div class="hero-button">
-            <a href="#analyze" style="text-decoration: none;">
-                <button class="stButton">💼 Get Started Now</button>
-            </a>
-        </div>
     </div>
     """, unsafe_allow_html=True)
+
+    # Use columns to center the button
+    col1, col2, col3 = st.columns([1, 2, 1]) # Adjust ratios if needed for better centering
+
+    with col2:
+        get_started_button = st.button("💼 Get Started Now", key="get_started_hero_button")
+    return get_started_button
 
 def display_about_section():
     """Displays the About Us section."""
