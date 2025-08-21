@@ -4,3 +4,4 @@ pdf2image
 PyMuPDF
 Pillow
 scikit-learn
+plotly
