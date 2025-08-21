@@ -1,4 +1,13 @@
 import streamlit as st
+
+# Must be the first Streamlit command
+st.set_page_config(
+    page_title="AI Resume Analyzer | Modern CV Analysis",
+    page_icon="🚀",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
 import pandas as pd
 import numpy as np
 import re
@@ -20,36 +29,102 @@ from docx import Document
 import time
 
 # Download required NLTK data
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt')
-try:
-    nltk.data.find('corpora/stopwords')
-except LookupError:
-    nltk.download('stopwords')
-try:
-    nltk.data.find('corpora/wordnet')
-except LookupError:
-    nltk.download('wordnet')
+@st.cache_resource
+def download_nltk_data():
+    try:
+        nltk.data.find('tokenizers/punkt')
+    except LookupError:
+        nltk.download('punkt')
+    try:
+        nltk.data.find('corpora/stopwords')
+    except LookupError:
+        nltk.download('stopwords')
+    try:
+        nltk.data.find('corpora/wordnet')
+    except LookupError:
+        nltk.download('wordnet')
 
-# Custom CSS for modern UI
+# Call the function
+download_nltk_data()
+
+# Updated CSS for better Streamlit Cloud compatibility
 def load_css():
     st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    /* Import safe web fonts */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     
-    /* Global Styling */
-    .main {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        font-family: 'Inter', sans-serif;
-    }
-    
+    /* Reset and base styles */
     .stApp {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        font-family: 'Inter', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
     }
     
-    /* Header Styling */
+    .main .block-container {
+        padding-top: 1rem;
+        padding-bottom: 2rem;
+        max-width: 1200px;
+    }
+    
+    /* Force sidebar visibility */
+    .css-1d391kg, .css-1lcbmhc, .css-17ziqus, .css-1cypcdb {
+        background: rgba(40, 40, 60, 0.95) !important;
+        backdrop-filter: blur(10px) !important;
+        border-right: 1px solid rgba(255, 255, 255, 0.2) !important;
+    }
+    
+    .css-1d391kg .css-1v3fvcr, .css-1lcbmhc .css-1v3fvcr {
+        background: transparent !important;
+    }
+    
+    /* Sidebar content styling */
+    .css-1d391kg h1, .css-1d391kg h2, .css-1d391kg h3 {
+        color: white !important;
+    }
+    
+    .css-1d391kg .stMarkdown, .css-1d391kg .stText {
+        color: rgba(255, 255, 255, 0.9) !important;
+    }
+    
+    /* File uploader in sidebar */
+    .css-1d391kg .stFileUploader > div {
+        background: rgba(255, 255, 255, 0.1) !important;
+        border: 2px dashed rgba(255, 255, 255, 0.3) !important;
+        border-radius: 10px !important;
+        padding: 2rem !important;
+    }
+    
+    .css-1d391kg .stFileUploader label {
+        color: white !important;
+        font-weight: 600 !important;
+    }
+    
+    /* Text area in sidebar */
+    .css-1d391kg .stTextArea > div > div > textarea {
+        background: rgba(255, 255, 255, 0.1) !important;
+        border: 1px solid rgba(255, 255, 255, 0.3) !important;
+        color: white !important;
+        border-radius: 8px !important;
+    }
+    
+    .css-1d391kg .stTextArea label {
+        color: white !important;
+    }
+    
+    /* Expander in sidebar */
+    .css-1d391kg .streamlit-expanderHeader {
+        background: rgba(255, 255, 255, 0.1) !important;
+        color: white !important;
+        border-radius: 8px !important;
+    }
+    
+    .css-1d391kg .streamlit-expanderContent {
+        background: rgba(255, 255, 255, 0.05) !important;
+        color: rgba(255, 255, 255, 0.9) !important;
+        border-radius: 0 0 8px 8px !important;
+    }
+    
+    /* Main header styling */
     .main-header {
         text-align: center;
         background: rgba(255, 255, 255, 0.1);
@@ -62,109 +137,62 @@ def load_css():
     }
     
     .main-title {
-        font-size: 3.5rem;
+        font-size: clamp(2rem, 5vw, 3.5rem);
         font-weight: 700;
         background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
         margin-bottom: 1rem;
-        text-shadow: 0 0 30px rgba(255, 255, 255, 0.5);
+        line-height: 1.2;
     }
     
     .main-subtitle {
-        font-size: 1.3rem;
+        font-size: clamp(1rem, 3vw, 1.3rem);
         color: rgba(255, 255, 255, 0.9);
         font-weight: 400;
         margin-bottom: 2rem;
+        line-height: 1.4;
     }
     
-    /* Card Styling */
+    /* Card styling with better mobile support */
     .metric-card {
         background: rgba(255, 255, 255, 0.15);
         backdrop-filter: blur(20px);
-        border-radius: 20px;
-        padding: 2rem;
+        border-radius: 15px;
+        padding: 1.5rem;
         margin: 1rem 0;
         border: 1px solid rgba(255, 255, 255, 0.2);
         box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
-        transition: all 0.3s ease;
+        transition: transform 0.3s ease;
         text-align: center;
+        min-height: 120px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
     }
     
     .metric-card:hover {
         transform: translateY(-5px);
-        box-shadow: 0 15px 45px rgba(31, 38, 135, 0.5);
     }
     
     .metric-value {
-        font-size: 2.5rem;
+        font-size: clamp(1.8rem, 4vw, 2.5rem);
         font-weight: 700;
         color: #ffffff;
         margin-bottom: 0.5rem;
+        line-height: 1;
     }
     
     .metric-label {
-        font-size: 1rem;
+        font-size: clamp(0.9rem, 2vw, 1rem);
         color: rgba(255, 255, 255, 0.8);
         font-weight: 500;
     }
     
-    /* Sidebar Styling */
-    .css-1d391kg {
-        background: rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(20px);
-        border-right: 1px solid rgba(255, 255, 255, 0.2);
-    }
-    
-    /* Upload Area */
-    .upload-area {
-        background: rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(20px);
-        border-radius: 20px;
-        padding: 2rem;
-        margin: 1rem 0;
-        border: 2px dashed rgba(255, 255, 255, 0.3);
-        text-align: center;
-        transition: all 0.3s ease;
-    }
-    
-    .upload-area:hover {
-        border-color: rgba(255, 255, 255, 0.6);
-        background: rgba(255, 255, 255, 0.15);
-    }
-    
-    /* Progress Bar */
-    .progress-container {
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 10px;
-        padding: 1rem;
-        margin: 1rem 0;
-    }
-    
-    .progress-bar {
-        background: linear-gradient(90deg, #ff6b6b, #4ecdc4);
-        height: 8px;
-        border-radius: 4px;
-        transition: width 0.3s ease;
-    }
-    
-    /* Skills Tags */
-    .skill-tag {
-        display: inline-block;
-        background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
-        color: white;
-        padding: 0.5rem 1rem;
-        margin: 0.25rem;
-        border-radius: 25px;
-        font-size: 0.9rem;
-        font-weight: 500;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-    }
-    
-    /* Section Headers */
+    /* Section headers */
     .section-header {
-        font-size: 2rem;
+        font-size: clamp(1.5rem, 4vw, 2rem);
         font-weight: 600;
         color: #ffffff;
         margin: 2rem 0 1rem 0;
@@ -178,13 +206,27 @@ def load_css():
         bottom: -10px;
         left: 50%;
         transform: translateX(-50%);
-        width: 100px;
+        width: 80px;
         height: 3px;
         background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
         border-radius: 2px;
     }
     
-    /* Recommendation Cards */
+    /* Skills tags */
+    .skill-tag {
+        display: inline-block;
+        background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+        color: white;
+        padding: 0.4rem 0.8rem;
+        margin: 0.2rem;
+        border-radius: 20px;
+        font-size: clamp(0.8rem, 2vw, 0.9rem);
+        font-weight: 500;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        white-space: nowrap;
+    }
+    
+    /* Recommendation cards */
     .recommendation-card {
         background: rgba(255, 255, 255, 0.1);
         backdrop-filter: blur(20px);
@@ -195,7 +237,7 @@ def load_css():
         box-shadow: 0 5px 20px rgba(31, 38, 135, 0.3);
     }
     
-    /* Feature Cards */
+    /* Feature cards */
     .feature-card {
         background: rgba(255, 255, 255, 0.1);
         backdrop-filter: blur(20px);
@@ -203,75 +245,112 @@ def load_css():
         padding: 2rem;
         margin: 1rem;
         text-align: center;
-        transition: all 0.3s ease;
+        transition: transform 0.3s ease;
         border: 1px solid rgba(255, 255, 255, 0.2);
+        min-height: 250px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
     }
     
     .feature-card:hover {
-        transform: translateY(-10px);
-        box-shadow: 0 20px 40px rgba(31, 38, 135, 0.5);
+        transform: translateY(-5px);
     }
     
     .feature-icon {
         font-size: 3rem;
         margin-bottom: 1rem;
+        line-height: 1;
     }
     
-    /* Animated Background */
-    .floating-shapes {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        z-index: -1;
-    }
-    
-    .shape {
-        position: absolute;
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 50%;
-        animation: float 6s ease-in-out infinite;
-    }
-    
-    @keyframes float {
-        0%, 100% { transform: translateY(0px); }
-        50% { transform: translateY(-20px); }
-    }
-    
-    /* Buttons */
+    /* Button styling */
     .stButton > button {
-        background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
-        border: none;
-        border-radius: 25px;
-        padding: 0.75rem 2rem;
-        font-weight: 600;
-        color: white;
-        transition: all 0.3s ease;
-        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        background: linear-gradient(45deg, #ff6b6b, #4ecdc4) !important;
+        border: none !important;
+        border-radius: 25px !important;
+        padding: 0.75rem 2rem !important;
+        font-weight: 600 !important;
+        color: white !important;
+        transition: transform 0.3s ease !important;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2) !important;
+        width: 100% !important;
     }
     
     .stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+        transform: translateY(-2px) !important;
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3) !important;
     }
     
-    /* Text Areas and Inputs */
-    .stTextArea textarea {
-        background: rgba(255, 255, 255, 0.1);
-        border: 1px solid rgba(255, 255, 255, 0.3);
-        border-radius: 10px;
-        color: white;
-        backdrop-filter: blur(10px);
+    .stButton > button:focus {
+        outline: none !important;
+        box-shadow: 0 0 0 2px rgba(78, 205, 196, 0.5) !important;
     }
     
-    /* Hide Streamlit Branding */
+    /* Progress bar */
+    .stProgress > div > div > div > div {
+        background: linear-gradient(90deg, #ff6b6b, #4ecdc4) !important;
+    }
+    
+    /* Success/Error messages */
+    .stSuccess, .stInfo, .stWarning, .stError {
+        background: rgba(255, 255, 255, 0.1) !important;
+        backdrop-filter: blur(10px) !important;
+        border-radius: 10px !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    }
+    
+    /* Plotly chart containers */
+    .js-plotly-plot {
+        background: rgba(255, 255, 255, 0.05) !important;
+        border-radius: 15px !important;
+        padding: 1rem !important;
+        margin: 1rem 0 !important;
+    }
+    
+    /* Hide Streamlit branding and menu */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
+    .stDeployButton {visibility: hidden;}
     
-    /* Custom Scrollbar */
+    /* Mobile responsiveness */
+    @media (max-width: 768px) {
+        .main .block-container {
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+        }
+        
+        .metric-card {
+            padding: 1rem;
+            margin: 0.5rem 0;
+        }
+        
+        .feature-card {
+            padding: 1.5rem;
+            margin: 0.5rem;
+            min-height: 200px;
+        }
+        
+        .skill-tag {
+            padding: 0.3rem 0.6rem;
+            font-size: 0.8rem;
+            margin: 0.1rem;
+        }
+    }
+    
+    /* Loading states */
+    .stSpinner > div {
+        border-top-color: #4ecdc4 !important;
+    }
+    
+    /* Dataframe styling */
+    .stDataFrame {
+        background: rgba(255, 255, 255, 0.1) !important;
+        border-radius: 10px !important;
+        backdrop-filter: blur(10px) !important;
+    }
+    
+    /* Custom scrollbar */
     ::-webkit-scrollbar {
         width: 8px;
     }
@@ -285,36 +364,7 @@ def load_css():
         background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
         border-radius: 10px;
     }
-    
-    /* Loading Animation */
-    .loading-container {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        padding: 2rem;
-    }
-    
-    .loading-spinner {
-        width: 50px;
-        height: 50px;
-        border: 3px solid rgba(255, 255, 255, 0.3);
-        border-top: 3px solid #4ecdc4;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-    }
-    
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
     </style>
-    
-    <div class="floating-shapes">
-        <div class="shape" style="width: 100px; height: 100px; top: 10%; left: 10%; animation-delay: 0s;"></div>
-        <div class="shape" style="width: 150px; height: 150px; top: 20%; right: 10%; animation-delay: 1s;"></div>
-        <div class="shape" style="width: 80px; height: 80px; bottom: 20%; left: 15%; animation-delay: 2s;"></div>
-        <div class="shape" style="width: 120px; height: 120px; bottom: 10%; right: 20%; animation-delay: 3s;"></div>
-    </div>
     """, unsafe_allow_html=True)
 
 class ResumeAnalyzer:
@@ -341,7 +391,8 @@ class ResumeAnalyzer:
         self.education_keywords = ['bachelor', 'master', 'phd', 'degree', 'university', 'college', 'certification', 
                                  'course', 'training', 'certified']
     
-    def preprocess_text(self, text):
+    @st.cache_data
+    def preprocess_text(_self, text):
         """Clean and preprocess text"""
         if not text:
             return ""
@@ -356,8 +407,8 @@ class ResumeAnalyzer:
         tokens = word_tokenize(text)
         
         # Remove stopwords and lemmatize
-        tokens = [self.lemmatizer.lemmatize(token) for token in tokens 
-                 if token not in self.stop_words and len(token) > 2]
+        tokens = [_self.lemmatizer.lemmatize(token) for token in tokens 
+                 if token not in _self.stop_words and len(token) > 2]
         
         return ' '.join(tokens)
     
@@ -448,15 +499,16 @@ class ResumeAnalyzer:
         
         return similarity[0][0] * 100
     
-    def analyze_resume(self, resume_text, job_description=""):
+    @st.cache_data
+    def analyze_resume(_self, resume_text, job_description=""):
         """Main analysis function"""
         # Extract skills
-        skills = self.extract_skills(resume_text)
+        skills = _self.extract_skills(resume_text)
         
         # Calculate scores
-        experience_score, total_years = self.calculate_experience_score(resume_text)
-        education_score = self.calculate_education_score(resume_text)
-        job_match_score = self.calculate_job_match(resume_text, job_description)
+        experience_score, total_years = _self.calculate_experience_score(resume_text)
+        education_score = _self.calculate_education_score(resume_text)
+        job_match_score = _self.calculate_job_match(resume_text, job_description)
         
         # Calculate overall score
         overall_score = (experience_score * 0.4 + education_score * 0.3 + job_match_score * 0.3)
@@ -472,7 +524,7 @@ class ResumeAnalyzer:
         }
 
 def create_modern_skills_chart(skills_data):
-    """Create modern skills visualization with glassmorphism effect"""
+    """Create modern skills visualization"""
     skill_counts = {}
     for category, skills in skills_data.items():
         if skills:
@@ -495,7 +547,8 @@ def create_modern_skills_chart(skills_data):
             title=dict(font=dict(size=20, color='white'), x=0.5),
             showlegend=False,
             xaxis=dict(showgrid=False, zeroline=False),
-            yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.2)', zeroline=False)
+            yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.2)', zeroline=False),
+            height=400
         )
         
         fig.update_traces(
@@ -507,7 +560,7 @@ def create_modern_skills_chart(skills_data):
     return None
 
 def create_modern_gauge(score, title, color_scheme="plasma"):
-    """Create modern gauge chart with glassmorphism effect"""
+    """Create modern gauge chart"""
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
         value=score,
@@ -593,7 +646,7 @@ def create_radar_chart(results):
     return fig
 
 def display_modern_header():
-    """Display modern header with glassmorphism effect"""
+    """Display modern header"""
     st.markdown("""
     <div class="main-header">
         <div class="main-title">🚀 AI Resume Analyzer</div>
@@ -719,13 +772,6 @@ def display_feature_cards():
             """, unsafe_allow_html=True)
 
 def main():
-    st.set_page_config(
-        page_title="AI Resume Analyzer | Modern CV Analysis",
-        page_icon="🚀",
-        layout="wide",
-        initial_sidebar_state="expanded"
-    )
-    
     # Load custom CSS
     load_css()
     
@@ -735,27 +781,29 @@ def main():
     # Initialize analyzer
     analyzer = ResumeAnalyzer()
     
-    # Modern sidebar
+    # Enhanced sidebar with better visibility controls
     with st.sidebar:
         st.markdown("""
-        <div style="text-align: center; padding: 2rem 0;">
-            <h2 style="color: white; font-weight: 600;">📄 Upload Resume</h2>
-            <p style="color: rgba(255, 255, 255, 0.8);">Drag and drop your resume file below</p>
+        <div style="text-align: center; padding: 2rem 0; background: rgba(255, 255, 255, 0.1); border-radius: 15px; margin-bottom: 1rem;">
+            <h2 style="color: white; font-weight: 600; margin-bottom: 0.5rem;">📄 Upload Resume</h2>
+            <p style="color: rgba(255, 255, 255, 0.8); margin: 0;">Drag and drop your resume file below</p>
         </div>
         """, unsafe_allow_html=True)
         
         uploaded_file = st.file_uploader(
             "Choose your resume",
             type=['pdf', 'docx', 'txt'],
-            help="Upload PDF, DOCX, or TXT files"
+            help="Upload PDF, DOCX, or TXT files",
+            key="resume_uploader"
         )
         
-        st.markdown("---")
+        # Add some spacing
+        st.markdown("<br>", unsafe_allow_html=True)
         
         st.markdown("""
-        <div style="text-align: center; padding: 1rem 0;">
-            <h3 style="color: white; font-weight: 600;">💼 Job Description</h3>
-            <p style="color: rgba(255, 255, 255, 0.8);">Paste job description for better matching</p>
+        <div style="text-align: center; padding: 1rem 0; background: rgba(255, 255, 255, 0.1); border-radius: 15px; margin: 1rem 0;">
+            <h3 style="color: white; font-weight: 600; margin-bottom: 0.5rem;">💼 Job Description</h3>
+            <p style="color: rgba(255, 255, 255, 0.8); margin: 0;">Paste job description for better matching</p>
         </div>
         """, unsafe_allow_html=True)
         
@@ -763,34 +811,39 @@ def main():
             "Job Description",
             height=200,
             placeholder="Paste the job description here to get accurate job matching scores...",
-            label_visibility="collapsed"
+            label_visibility="collapsed",
+            key="job_desc"
         )
         
-        # Quick tips
-        with st.expander("💡 Quick Tips"):
+        # Quick tips with better styling
+        with st.expander("💡 Quick Tips", expanded=False):
             st.markdown("""
-            <div style="color: rgba(255, 255, 255, 0.9); line-height: 1.6;">
-                <strong>📈 Improve Your Score:</strong><br>
-                • Use action verbs (developed, managed, led)<br>
-                • Include quantifiable achievements<br>
-                • Add relevant technical skills<br>
-                • Match keywords from job descriptions<br>
-                • Keep content detailed but concise
+            <div style="color: rgba(255, 255, 255, 0.9); line-height: 1.8; padding: 0.5rem;">
+                <p style="margin: 0 0 1rem 0;"><strong style="color: #4ecdc4;">📈 Improve Your Score:</strong></p>
+                <ul style="margin: 0; padding-left: 1.2rem;">
+                    <li style="margin-bottom: 0.5rem;">Use action verbs (developed, managed, led)</li>
+                    <li style="margin-bottom: 0.5rem;">Include quantifiable achievements</li>
+                    <li style="margin-bottom: 0.5rem;">Add relevant technical skills</li>
+                    <li style="margin-bottom: 0.5rem;">Match keywords from job descriptions</li>
+                    <li style="margin-bottom: 0;">Keep content detailed but concise</li>
+                </ul>
             </div>
             """, unsafe_allow_html=True)
 
     if uploaded_file is not None:
-        # Create columns for layout
+        # Create columns for better layout
         main_col, chart_col = st.columns([2, 1])
         
         with main_col:
-            # Show loading animation
+            # Enhanced loading with better UX
             with st.spinner("🤖 AI is analyzing your resume..."):
-                # Simulate processing time for better UX
+                # Show progress
                 progress_bar = st.progress(0)
-                for i in range(100):
-                    time.sleep(0.01)
-                    progress_bar.progress(i + 1)
+                status_text = st.empty()
+                
+                status_text.text("📄 Reading file...")
+                progress_bar.progress(25)
+                time.sleep(0.5)
                 
                 # Extract text based on file type
                 if uploaded_file.type == "application/pdf":
@@ -800,11 +853,24 @@ def main():
                 else:  # txt file
                     resume_text = str(uploaded_file.read(), "utf-8")
                 
-                progress_bar.empty()
+                status_text.text("🔍 Analyzing content...")
+                progress_bar.progress(50)
+                time.sleep(0.5)
+                
+                status_text.text("🧠 Processing with AI...")
+                progress_bar.progress(75)
+                time.sleep(0.5)
                 
                 if resume_text:
                     # Analyze resume
                     results = analyzer.analyze_resume(resume_text, job_description)
+                    
+                    status_text.text("✅ Analysis complete!")
+                    progress_bar.progress(100)
+                    time.sleep(0.5)
+                    
+                    progress_bar.empty()
+                    status_text.empty()
                     
                     # Display success message
                     st.success("✅ Analysis Complete! Here are your results:")
@@ -812,7 +878,7 @@ def main():
                     # Display metric cards
                     display_metric_cards(results)
                     
-                    # Additional metrics row
+                    # Additional metrics row with better styling
                     st.markdown("<br>", unsafe_allow_html=True)
                     col1, col2, col3, col4 = st.columns(4)
                     
@@ -828,17 +894,25 @@ def main():
                             st.markdown(f"""
                             <div style="background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(20px); 
                                         border-radius: 15px; padding: 1.5rem; text-align: center; 
-                                        border: 1px solid rgba(255, 255, 255, 0.2); margin: 0.5rem 0;">
+                                        border: 1px solid rgba(255, 255, 255, 0.2); margin: 0.5rem 0;
+                                        transition: transform 0.3s ease;">
                                 <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">{icon}</div>
                                 <div style="font-size: 1.5rem; font-weight: 600; color: white; margin-bottom: 0.25rem;">{value}</div>
                                 <div style="font-size: 0.9rem; color: rgba(255, 255, 255, 0.7);">{label}</div>
                             </div>
                             """, unsafe_allow_html=True)
+                else:
+                    progress_bar.empty()
+                    status_text.empty()
+                    st.error("❌ Could not extract text from the file. Please try a different format.")
         
         with chart_col:
-            # Radar chart
-            radar_chart = create_radar_chart(results)
-            st.plotly_chart(radar_chart, use_container_width=True)
+            # Radar chart with error handling
+            try:
+                radar_chart = create_radar_chart(results)
+                st.plotly_chart(radar_chart, use_container_width=True)
+            except Exception as e:
+                st.warning("Chart temporarily unavailable")
         
         # Full-width visualizations section
         st.markdown('<div class="section-header">📊 Visual Analytics</div>', unsafe_allow_html=True)
@@ -846,25 +920,42 @@ def main():
         col1, col2 = st.columns(2)
         
         with col1:
-            # Skills chart
-            skills_chart = create_modern_skills_chart(results['skills'])
-            if skills_chart:
-                st.plotly_chart(skills_chart, use_container_width=True)
-            else:
-                st.markdown("""
-                <div style="background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(20px); 
-                            border-radius: 20px; padding: 3rem; text-align: center; 
-                            border: 1px solid rgba(255, 255, 255, 0.2);">
-                    <div style="font-size: 3rem; margin-bottom: 1rem;">🔍</div>
-                    <h3 style="color: white;">No Skills Detected</h3>
-                    <p style="color: rgba(255, 255, 255, 0.8);">Try uploading a more detailed resume with technical skills listed.</p>
-                </div>
-                """, unsafe_allow_html=True)
+            # Skills chart with error handling
+            try:
+                skills_chart = create_modern_skills_chart(results['skills'])
+                if skills_chart:
+                    st.plotly_chart(skills_chart, use_container_width=True)
+                else:
+                    st.markdown("""
+                    <div style="background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(20px); 
+                                border-radius: 20px; padding: 3rem; text-align: center; 
+                                border: 1px solid rgba(255, 255, 255, 0.2);">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">🔍</div>
+                        <h3 style="color: white; margin-bottom: 1rem;">No Skills Detected</h3>
+                        <p style="color: rgba(255, 255, 255, 0.8); margin: 0;">Try uploading a more detailed resume with technical skills listed.</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+            except Exception as e:
+                st.warning("Skills chart temporarily unavailable")
         
         with col2:
-            # Overall score gauge
-            overall_gauge = create_modern_gauge(results['overall_score'], "Overall Score")
-            st.plotly_chart(overall_gauge, use_container_width=True)
+            # Overall score gauge with error handling
+            try:
+                overall_gauge = create_modern_gauge(results['overall_score'], "Overall Score")
+                st.plotly_chart(overall_gauge, use_container_width=True)
+            except Exception as e:
+                st.markdown(f"""
+                <div style="background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(20px); 
+                            border-radius: 20px; padding: 3rem; text-align: center; 
+                            border: 1px solid rgba(255, 255, 255, 0.2); height: 350px; 
+                            display: flex; flex-direction: column; justify-content: center;">
+                    <div style="font-size: 4rem; color: #4ecdc4; margin-bottom: 1rem;">🎯</div>
+                    <div style="font-size: 2.5rem; font-weight: 700; color: white; margin-bottom: 0.5rem;">
+                        {results['overall_score']:.1f}%
+                    </div>
+                    <div style="color: rgba(255, 255, 255, 0.8);">Overall Score</div>
+                </div>
+                """, unsafe_allow_html=True)
         
         # Skills portfolio section
         if any(skills for skills in results['skills'].values()):
@@ -873,38 +964,24 @@ def main():
         # Recommendations section
         display_recommendations(results)
         
-        # Detailed analysis section
+        # Detailed analysis section with better styling
         with st.expander("🔬 Detailed Analysis", expanded=False):
             col1, col2 = st.columns(2)
             
             with col1:
                 st.markdown("### 📈 Score Breakdown")
                 
-                # Score breakdown chart
+                # Create score breakdown table
                 scores_data = {
                     'Category': ['Experience', 'Education', 'Job Match'],
-                    'Score': [results['experience_score'], results['education_score'], results['job_match_score']],
+                    'Score': [f"{results['experience_score']:.1f}%", 
+                             f"{results['education_score']:.1f}%", 
+                             f"{results['job_match_score']:.1f}%"],
                     'Weight': ['40%', '30%', '30%']
                 }
                 
-                breakdown_fig = px.bar(
-                    x=scores_data['Category'],
-                    y=scores_data['Score'],
-                    title="Score Components",
-                    color=scores_data['Score'],
-                    color_continuous_scale='viridis'
-                )
-                
-                breakdown_fig.update_layout(
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    font=dict(color='white'),
-                    title=dict(font=dict(size=16, color='white'), x=0.5),
-                    showlegend=False,
-                    height=300
-                )
-                
-                st.plotly_chart(breakdown_fig, use_container_width=True)
+                breakdown_df = pd.DataFrame(scores_data)
+                st.dataframe(breakdown_df, use_container_width=True, hide_index=True)
             
             with col2:
                 st.markdown("### 📊 Resume Statistics")
@@ -921,13 +998,9 @@ def main():
                 }
                 
                 stats_df = pd.DataFrame(stats_data)
-                st.dataframe(
-                    stats_df,
-                    use_container_width=True,
-                    hide_index=True
-                )
+                st.dataframe(stats_df, use_container_width=True, hide_index=True)
         
-        # Resume text preview
+        # Resume text preview with better formatting
         with st.expander("📄 Resume Preview", expanded=False):
             preview_text = resume_text[:2000] + "..." if len(resume_text) > 2000 else resume_text
             st.markdown(f"""
@@ -945,45 +1018,48 @@ def main():
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            if st.button("📊 Download Report", use_container_width=True):
-                # Create a simple report
-                report_data = {
-                    'Metric': ['Overall Score', 'Experience Score', 'Education Score', 'Job Match Score', 'Total Skills'],
-                    'Value': [
-                        f"{results['overall_score']:.1f}%",
-                        f"{results['experience_score']:.1f}%",
-                        f"{results['education_score']:.1f}%",
-                        f"{results['job_match_score']:.1f}%",
-                        sum(len(skills) for skills in results['skills'].values())
-                    ]
-                }
-                
-                report_df = pd.DataFrame(report_data)
-                csv = report_df.to_csv(index=False)
-                st.download_button(
-                    label="📥 Download CSV",
-                    data=csv,
-                    file_name="resume_analysis_report.csv",
-                    mime="text/csv"
-                )
+            # Create downloadable report
+            report_data = {
+                'Metric': ['Overall Score', 'Experience Score', 'Education Score', 'Job Match Score', 'Total Skills', 'Resume Length', 'Years Experience'],
+                'Value': [
+                    f"{results['overall_score']:.1f}%",
+                    f"{results['experience_score']:.1f}%",
+                    f"{results['education_score']:.1f}%",
+                    f"{results['job_match_score']:.1f}%",
+                    sum(len(skills) for skills in results['skills'].values()),
+                    f"{results['resume_length']} words",
+                    f"{results['total_years_experience']} years"
+                ]
+            }
+            
+            report_df = pd.DataFrame(report_data)
+            csv = report_df.to_csv(index=False)
+            
+            st.download_button(
+                label="📥 Download Report",
+                data=csv,
+                file_name="resume_analysis_report.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
         
         with col2:
             if st.button("🔄 Analyze Another", use_container_width=True):
                 st.rerun()
         
         with col3:
-            if st.button("💡 Get Tips", use_container_width=True):
-                st.info("💡 Check the sidebar for quick improvement tips!")
+            if st.button("💡 Get More Tips", use_container_width=True):
+                st.info("💡 Check the sidebar for quick improvement tips and upload another resume for comparison!")
     
     else:
-        # Landing page when no file is uploaded
-        st.markdown("<br><br>", unsafe_allow_html=True)
+        # Enhanced landing page when no file is uploaded
+        st.markdown("<br>", unsafe_allow_html=True)
         
         # Feature showcase
         display_feature_cards()
         
-        # Demo section
-        st.markdown('<div class="section-header">🎮 Try the Demo</div>', unsafe_allow_html=True)
+        # Demo section with step-by-step guide
+        st.markdown('<div class="section-header">🎮 How It Works</div>', unsafe_allow_html=True)
         
         demo_col1, demo_col2, demo_col3 = st.columns(3)
         
@@ -991,11 +1067,14 @@ def main():
             st.markdown("""
             <div style="background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(20px); 
                         border-radius: 20px; padding: 2rem; text-align: center; 
-                        border: 1px solid rgba(255, 255, 255, 0.2); height: 200px; 
-                        display: flex; flex-direction: column; justify-content: center;">
-                <div style="font-size: 2.5rem; margin-bottom: 1rem;">📤</div>
-                <h4 style="color: white; margin-bottom: 0.5rem;">Step 1</h4>
-                <p style="color: rgba(255, 255, 255, 0.8); margin: 0;">Upload your resume in PDF, DOCX, or TXT format</p>
+                        border: 1px solid rgba(255, 255, 255, 0.2); height: 250px; 
+                        display: flex; flex-direction: column; justify-content: center;
+                        transition: transform 0.3s ease;" 
+                 onmouseover="this.style.transform='translateY(-5px)'" 
+                 onmouseout="this.style.transform='translateY(0)'">
+                <div style="font-size: 3rem; margin-bottom: 1rem;">📤</div>
+                <h4 style="color: white; margin-bottom: 1rem; font-weight: 600;">Step 1: Upload</h4>
+                <p style="color: rgba(255, 255, 255, 0.8); margin: 0; line-height: 1.5;">Upload your resume in PDF, DOCX, or TXT format using the sidebar</p>
             </div>
             """, unsafe_allow_html=True)
         
@@ -1003,11 +1082,14 @@ def main():
             st.markdown("""
             <div style="background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(20px); 
                         border-radius: 20px; padding: 2rem; text-align: center; 
-                        border: 1px solid rgba(255, 255, 255, 0.2); height: 200px; 
-                        display: flex; flex-direction: column; justify-content: center;">
-                <div style="font-size: 2.5rem; margin-bottom: 1rem;">🤖</div>
-                <h4 style="color: white; margin-bottom: 0.5rem;">Step 2</h4>
-                <p style="color: rgba(255, 255, 255, 0.8); margin: 0;">AI analyzes your resume using advanced NLP algorithms</p>
+                        border: 1px solid rgba(255, 255, 255, 0.2); height: 250px; 
+                        display: flex; flex-direction: column; justify-content: center;
+                        transition: transform 0.3s ease;" 
+                 onmouseover="this.style.transform='translateY(-5px)'" 
+                 onmouseout="this.style.transform='translateY(0)'">
+                <div style="font-size: 3rem; margin-bottom: 1rem;">🤖</div>
+                <h4 style="color: white; margin-bottom: 1rem; font-weight: 600;">Step 2: AI Analysis</h4>
+                <p style="color: rgba(255, 255, 255, 0.8); margin: 0; line-height: 1.5;">Advanced NLP algorithms analyze your resume for skills, experience, and optimization opportunities</p>
             </div>
             """, unsafe_allow_html=True)
         
@@ -1015,26 +1097,75 @@ def main():
             st.markdown("""
             <div style="background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(20px); 
                         border-radius: 20px; padding: 2rem; text-align: center; 
-                        border: 1px solid rgba(255, 255, 255, 0.2); height: 200px; 
-                        display: flex; flex-direction: column; justify-content: center;">
-                <div style="font-size: 2.5rem; margin-bottom: 1rem;">📊</div>
-                <h4 style="color: white; margin-bottom: 0.5rem;">Step 3</h4>
-                <p style="color: rgba(255, 255, 255, 0.8); margin: 0;">Get detailed insights and actionable recommendations</p>
+                        border: 1px solid rgba(255, 255, 255, 0.2); height: 250px; 
+                        display: flex; flex-direction: column; justify-content: center;
+                        transition: transform 0.3s ease;" 
+                 onmouseover="this.style.transform='translateY(-5px)'" 
+                 onmouseout="this.style.transform='translateY(0)'">
+                <div style="font-size: 3rem; margin-bottom: 1rem;">📊</div>
+                <h4 style="color: white; margin-bottom: 1rem; font-weight: 600;">Step 3: Get Insights</h4>
+                <p style="color: rgba(255, 255, 255, 0.8); margin: 0; line-height: 1.5;">Receive detailed insights, scores, and actionable recommendations to improve your resume</p>
             </div>
             """, unsafe_allow_html=True)
         
-        # Call to action
+        # Enhanced call to action
         st.markdown("<br><br>", unsafe_allow_html=True)
         st.markdown("""
-        <div style="text-align: center; padding: 3rem; background: rgba(255, 255, 255, 0.05); 
-                    border-radius: 25px; border: 1px solid rgba(255, 255, 255, 0.1);">
-            <h2 style="color: white; margin-bottom: 1rem;">Ready to optimize your resume?</h2>
-            <p style="color: rgba(255, 255, 255, 0.8); font-size: 1.2rem; margin-bottom: 2rem;">
-                Join thousands of professionals who have improved their resumes with AI-powered insights
+        <div style="text-align: center; padding: 3rem; background: rgba(255, 255, 255, 0.08); 
+                    border-radius: 25px; border: 1px solid rgba(255, 255, 255, 0.15);
+                    backdrop-filter: blur(20px);">
+            <h2 style="color: white; margin-bottom: 1rem; font-weight: 600;">🚀 Ready to optimize your resume?</h2>
+            <p style="color: rgba(255, 255, 255, 0.85); font-size: 1.2rem; margin-bottom: 2rem; line-height: 1.6;">
+                Join thousands of professionals who have improved their resumes with AI-powered insights.<br>
+                Get personalized recommendations and boost your job application success rate!
             </p>
-            <div style="font-size: 1.5rem;">👆 Upload your resume in the sidebar to get started!</div>
+            <div style="font-size: 1.8rem; background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+                        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+                        font-weight: 600;">
+                👆 Upload your resume in the sidebar to get started!
+            </div>
         </div>
         """, unsafe_allow_html=True)
+        
+        # Additional features section
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.markdown('<div class="section-header">🌟 Why Choose Our AI Resume Analyzer?</div>', unsafe_allow_html=True)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            benefits = [
+                "🎯 Instant comprehensive analysis",
+                "📊 Visual insights and scoring",
+                "🤖 Advanced NLP technology",
+                "📝 Actionable recommendations",
+                "🔍 Job description matching"
+            ]
+            
+            for benefit in benefits:
+                st.markdown(f"""
+                <div style="background: rgba(255, 255, 255, 0.05); padding: 1rem; margin: 0.5rem 0;
+                            border-radius: 10px; border-left: 3px solid #4ecdc4;">
+                    <span style="color: rgba(255, 255, 255, 0.9); font-size: 1.1rem;">{benefit}</span>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        with col2:
+            features = [
+                "📤 Multiple file format support",
+                "💾 Downloadable analysis reports",
+                "🔄 Real-time processing",
+                "🎨 Beautiful data visualizations",
+                "💡 Industry-specific insights"
+            ]
+            
+            for feature in features:
+                st.markdown(f"""
+                <div style="background: rgba(255, 255, 255, 0.05); padding: 1rem; margin: 0.5rem 0;
+                            border-radius: 10px; border-left: 3px solid #ff6b6b;">
+                    <span style="color: rgba(255, 255, 255, 0.9); font-size: 1.1rem;">{feature}</span>
+                </div>
+                """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
