@@ -6,3 +6,5 @@ Pillow
 scikit-learn
 plotly
 PyPDF2
+docx
+
