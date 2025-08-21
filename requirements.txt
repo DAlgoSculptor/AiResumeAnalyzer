@@ -6,6 +6,7 @@ Pillow
 scikit-learn
 plotly
 PyPDF2
-python-docx  ✅ (this is the official package you need)
+python-docx 
+
 
 
